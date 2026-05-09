@@ -22,7 +22,8 @@ type ShapeType = 'curve' | 'line' | 'circle' | 'rect';
 
 interface ScribbleSettings {
   density: number;
-  size: number;
+  minSize: number;
+  maxSize: number;
   types: ShapeType[];
   grayscale: boolean;
   opacity: number;
@@ -58,7 +59,8 @@ export default function App() {
   
   const [settings, setSettings] = useState<ScribbleSettings>({
     density: 5,
-    size: 1.0,
+    minSize: 0.5,
+    maxSize: 1.5,
     types: ['curve', 'line', 'circle'],
     grayscale: true,
     opacity: 0.4,
@@ -215,23 +217,25 @@ export default function App() {
       const type = settings.types[Math.floor(Math.random() * settings.types.length)];
       ctx.beginPath();
       
-      // 個別の透明度をランダムに設定 (0.1 ~ 0.8)
-      const individualAlpha = Math.random() * 0.7 + 0.1;
+      // Use settings.opacity for individual transparency
+      const alpha = settings.opacity * (Math.random() * 0.5 + 0.5); // Slight randomness within the opacity setting
       
       if (settings.grayscale) {
         const grey = Math.floor(Math.random() * 150 + 50);
-        ctx.strokeStyle = `rgba(${grey}, ${grey}, ${grey}, ${individualAlpha})`;
+        ctx.strokeStyle = `rgba(${grey}, ${grey}, ${grey}, ${alpha})`;
       } else {
-        // 彩度と輝度も少しランダムにして表情を出す
         const h = Math.random() * 360;
         const s = Math.random() * 70 + 30;
         const l = Math.random() * 50 + 20;
-        ctx.strokeStyle = `hsla(${h}, ${s}%, ${l}%, ${individualAlpha})`;
+        ctx.strokeStyle = `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
       }
       
-      ctx.lineWidth = (Math.random() * 3 + 0.5) * Math.sqrt(settings.size);
+      // Calculate a random size for this shape
+      const currentSize = settings.minSize + Math.random() * (settings.maxSize - settings.minSize);
+      
+      ctx.lineWidth = (Math.random() * 3 + 0.5) * Math.sqrt(currentSize);
 
-      const baseSize = Math.min(width, height) * 0.15 * settings.size;
+      const baseSize = Math.min(width, height) * 0.2 * currentSize;
 
       if (type === 'curve') {
         const x1 = Math.random() * width;
@@ -251,17 +255,16 @@ export default function App() {
           y1 + (Math.random() - 0.5) * baseSize * 2
         );
       } else if (type === 'circle') {
-        // 円に加えて楕円と回転を追加
         const centerX = Math.random() * width;
         const centerY = Math.random() * height;
-        const radiusX = (Math.random() * 80 + 10) * settings.size;
-        const radiusY = (Math.random() * 80 + 10) * settings.size;
+        const radiusX = (Math.random() * baseSize * 0.6 + baseSize * 0.1);
+        const radiusY = (Math.random() * baseSize * 0.6 + baseSize * 0.1);
         const rotation = Math.random() * Math.PI;
         ctx.ellipse(centerX, centerY, radiusX, radiusY, rotation, 0, Math.PI * 2);
       } else if (type === 'rect') {
         const shapeVar = Math.random();
-        const rw = (Math.random() * 150 + 20) * settings.size;
-        const rh = (Math.random() * 150 + 20) * settings.size;
+        const rw = (Math.random() * baseSize + baseSize * 0.2);
+        const rh = (Math.random() * baseSize + baseSize * 0.2);
         const rx = Math.random() * width;
         const ry = Math.random() * height;
         const angle = Math.random() * Math.PI;
@@ -485,9 +488,9 @@ export default function App() {
       ctx.restore();
     }
     
-    // Scribbles
+    // Scribbles (Alpha is now baked into the individual shapes)
     ctx.save();
-    ctx.globalAlpha = settings.opacity;
+    ctx.globalAlpha = 1.0;
     ctx.drawImage(sCanvas, 0, 0);
     ctx.restore();
     
@@ -685,13 +688,39 @@ export default function App() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-mono uppercase text-studio-ink/60 flex justify-between">
-                        Scale / Size <span>{settings.size.toFixed(1)}x</span>
+                        Minimum Size <span>{settings.minSize.toFixed(1)}x</span>
                       </label>
                       <input 
                         type="range" 
-                        min="0.2" max="5.0" step="0.1"
-                        value={settings.size}
-                        onChange={(e) => setSettings({...settings, size: parseFloat(e.target.value)})}
+                        min="0.1" max="5.0" step="0.1"
+                        value={settings.minSize}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setSettings({
+                            ...settings, 
+                            minSize: val,
+                            maxSize: Math.max(val, settings.maxSize)
+                          });
+                        }}
+                        className="w-full accent-studio-ink"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase text-studio-ink/60 flex justify-between">
+                        Maximum Size <span>{settings.maxSize.toFixed(1)}x</span>
+                      </label>
+                      <input 
+                        type="range" 
+                        min="0.1" max="5.0" step="0.1"
+                        value={settings.maxSize}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setSettings({
+                            ...settings, 
+                            maxSize: val,
+                            minSize: Math.min(val, settings.minSize)
+                          });
+                        }}
                         className="w-full accent-studio-ink"
                       />
                     </div>
@@ -1032,7 +1061,6 @@ export default function App() {
             <canvas
               ref={scribbleCanvasRef}
               className="canvas-layer pointer-events-none transition-opacity duration-300"
-              style={{ opacity: settings.opacity }}
             />
             
             {/* Drawing Layer */}
